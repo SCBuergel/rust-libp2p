@@ -152,6 +152,24 @@ impl From<Config> for QuinnConfig {
         transport.stream_receive_window(max_stream_data.into());
         transport.receive_window(max_connection_data.into());
         transport.mtu_discovery_config(mtu_discovery_config);
+        // HOPR experiment knobs: tolerance of reordering on the wire, and the congestion controller.
+        // QUIC declares a packet lost once 3 later ones are acknowledged (or 9/8 RTT passed); links
+        // whose jitter reorders packets then read as lossy and the connection throttles itself.
+        if let Some(n) = std::env::var("HOPR_INTERNAL_QUIC_PACKET_THRESHOLD").ok().and_then(|v| v.trim().parse::<u32>().ok()) {
+            transport.packet_threshold(n.max(3));
+        }
+        if let Some(f) = std::env::var("HOPR_INTERNAL_QUIC_TIME_THRESHOLD").ok().and_then(|v| v.trim().parse::<f32>().ok()) {
+            transport.time_threshold(f.max(1.0));
+        }
+        match std::env::var("HOPR_INTERNAL_QUIC_CC").ok().as_deref().map(str::trim) {
+            Some("bbr") => {
+                transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
+            }
+            Some("newreno") => {
+                transport.congestion_controller_factory(Arc::new(quinn::congestion::NewRenoConfig::default()));
+            }
+            _ => {}
+        }
         let transport = Arc::new(transport);
 
         let mut server_config = quinn::ServerConfig::with_crypto(server_tls_config);
