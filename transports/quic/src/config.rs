@@ -166,6 +166,10 @@ impl From<Config> for QuinnConfig {
         if let Some(f) = std::env::var("HOPR_INTERNAL_QUIC_LOSS_RTTVAR").ok().and_then(|v| v.trim().parse::<f32>().ok()) {
             transport.loss_delay_rtt_var_factor(f.max(0.0));
         }
+        // HOPR_INTERNAL_QUIC_ADAPTIVE_REORDER=1: tolerate as much reordering as spurious losses have shown.
+        if std::env::var("HOPR_INTERNAL_QUIC_ADAPTIVE_REORDER").ok().map(|v| v.trim() == "1").unwrap_or(false) {
+            transport.adaptive_reordering(true);
+        }
         match std::env::var("HOPR_INTERNAL_QUIC_CC").ok().as_deref().map(str::trim) {
             Some("bbr") => {
                 transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
