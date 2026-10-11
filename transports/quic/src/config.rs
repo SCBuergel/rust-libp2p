@@ -161,6 +161,11 @@ impl From<Config> for QuinnConfig {
         if let Some(f) = std::env::var("HOPR_INTERNAL_QUIC_TIME_THRESHOLD").ok().and_then(|v| v.trim().parse::<f32>().ok()) {
             transport.time_threshold(f.max(1.0));
         }
+        // Loss delay = time_threshold * rtt + HOPR_INTERNAL_QUIC_LOSS_RTTVAR * rttvar: a path whose RTT
+        // jitters declares late packets lost at 9/8 RTT; the variance term keeps the delay above the jitter.
+        if let Some(f) = std::env::var("HOPR_INTERNAL_QUIC_LOSS_RTTVAR").ok().and_then(|v| v.trim().parse::<f32>().ok()) {
+            transport.loss_delay_rtt_var_factor(f.max(0.0));
+        }
         match std::env::var("HOPR_INTERNAL_QUIC_CC").ok().as_deref().map(str::trim) {
             Some("bbr") => {
                 transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));

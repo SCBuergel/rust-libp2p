@@ -55,6 +55,44 @@ impl Connection {
     /// This function assumes that the [`quinn::Connection`] is completely fresh and none of
     /// its methods has ever been called. Failure to comply might lead to logic errors and panics.
     fn new(connection: quinn::Connection) -> Self {
+        // HOPR_INTERNAL_QUIC_STATS_SECS=n: log quinn's path statistics of every connection every n seconds
+        // (target `hopr_quic_stats`): RTT, congestion window, packets lost and congestion events so far.
+        #[cfg(feature = "tokio")]
+        if let Some(secs) = std::env::var("HOPR_INTERNAL_QUIC_STATS_SECS")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .filter(|s| *s > 0)
+        {
+            let c = connection.clone();
+            tokio::spawn(async move {
+                let started = std::time::Instant::now();
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
+                    if c.close_reason().is_some() {
+                        break;
+                    }
+                    let s = c.stats();
+                    tracing::info!(
+                        target: "hopr_quic_stats",
+                        remote = %c.remote_address(),
+                        id = c.stable_id(),
+                        age_s = started.elapsed().as_secs(),
+                        rtt_ms = s.path.rtt.as_millis(),
+                        cwnd = s.path.cwnd,
+                        lost = s.path.lost_packets,
+                        lost_bytes = s.path.lost_bytes,
+                        cong = s.path.congestion_events,
+                        sent = s.path.sent_packets,
+                        mtu = s.path.current_mtu,
+                        tx_dg = s.udp_tx.datagrams,
+                        tx_bytes = s.udp_tx.bytes,
+                        rx_dg = s.udp_rx.datagrams,
+                        rx_bytes = s.udp_rx.bytes,
+                        "quic path stats"
+                    );
+                }
+            });
+        }
         Self {
             connection,
             incoming: None,
