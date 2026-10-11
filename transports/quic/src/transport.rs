@@ -85,6 +85,19 @@ pub struct GenTransport<P: Provider> {
 }
 
 #[expect(deprecated)]
+
+/// HOPR_INTERNAL_QUIC_RCVBUF=<bytes>: the UDP socket's receive buffer (SO_RCVBUF, bounded by net.core.rmem_max).
+/// A node fed by many peers at once overflows the kernel default of 208 KB in bursts (the exit lost 0.3 % of its
+/// datagrams that way under load) and every such drop is a real QUIC loss.
+fn set_recv_buffer(socket: &socket2::Socket) {
+    if let Some(bytes) = std::env::var("HOPR_INTERNAL_QUIC_RCVBUF").ok().and_then(|v| v.trim().parse::<usize>().ok()) {
+        match socket.set_recv_buffer_size(bytes) {
+            Ok(()) => tracing::info!(requested = bytes, got = ?socket.recv_buffer_size(), "QUIC UDP receive buffer"),
+            Err(e) => tracing::warn!(%e, "QUIC UDP receive buffer not set"),
+        }
+    }
+}
+
 impl<P: Provider> GenTransport<P> {
     /// Create a new [`GenTransport`] with the given [`Config`].
     pub fn new(config: Config) -> Self {
@@ -191,6 +204,7 @@ impl<P: Provider> GenTransport<P> {
         }
 
         socket.bind(&socket_addr.into())?;
+        set_recv_buffer(&socket);
 
         Ok(socket.into())
     }
@@ -205,6 +219,7 @@ impl<P: Provider> GenTransport<P> {
             SocketFamily::Ipv6 => SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0),
         };
         let socket = UdpSocket::bind(listen_socket_addr)?;
+        set_recv_buffer(&socket2::SockRef::from(&socket));
         let endpoint_config = self.quinn_config.endpoint_config.clone();
         let endpoint = Self::new_endpoint(endpoint_config, None, socket)?;
         Ok(endpoint)

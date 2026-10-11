@@ -78,6 +78,7 @@ impl Connection {
                         id = c.stable_id(),
                         age_s = started.elapsed().as_secs(),
                         rtt_ms = s.path.rtt.as_millis(),
+                        rttvar_ms = s.path.rtt_var.as_millis(),
                         cwnd = s.path.cwnd,
                         lost = s.path.lost_packets,
                         lost_bytes = s.path.lost_bytes,
