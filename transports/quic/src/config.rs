@@ -170,6 +170,12 @@ impl From<Config> for QuinnConfig {
         if std::env::var("HOPR_INTERNAL_QUIC_ADAPTIVE_REORDER").ok().map(|v| v.trim() == "1").unwrap_or(false) {
             transport.adaptive_reordering(true);
         }
+        // HOPR_INTERNAL_QUIC_SEND_WINDOW=<bytes>: how much unacknowledged stream data a connection may buffer
+        // (quinn's send_window, default 10 MB). A link whose window collapsed otherwise accumulates seconds of
+        // backlog that every packet routed over it then waits in.
+        if let Some(b) = std::env::var("HOPR_INTERNAL_QUIC_SEND_WINDOW").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
+            transport.send_window(b.max(65_536));
+        }
         match std::env::var("HOPR_INTERNAL_QUIC_CC").ok().as_deref().map(str::trim) {
             Some("bbr") => {
                 transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
