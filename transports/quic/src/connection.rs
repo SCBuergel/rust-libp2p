@@ -85,6 +85,8 @@ impl Connection {
                         cong = s.path.congestion_events,
                         spurious = s.path.spurious_losses,
                         dedup = s.path.dedup_dropped,
+                        rx_pkts = s.path.recv_packets,
+                        auth_fail = s.path.auth_failures,
                         rng_drop = s.path.ack_ranges_dropped,
                         below_floor = s.path.late_below_ack_floor,
                         reo_pkts = s.path.reorder_packets,
