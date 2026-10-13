@@ -183,7 +183,15 @@ impl From<Config> for QuinnConfig {
             Some("newreno") => {
                 transport.congestion_controller_factory(Arc::new(quinn::congestion::NewRenoConfig::default()));
             }
-            _ => {}
+            _ => {
+                // HOPR_INTERNAL_QUIC_MIN_CWND=<bytes>: cubic's congestion window never shrinks below this.
+                // Random loss on a long path otherwise pins the window at 2 datagrams per RTT.
+                if let Some(b) = std::env::var("HOPR_INTERNAL_QUIC_MIN_CWND").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
+                    let mut cubic = quinn::congestion::CubicConfig::default();
+                    cubic.minimum_window(b);
+                    transport.congestion_controller_factory(Arc::new(cubic));
+                }
+            }
         }
         let transport = Arc::new(transport);
 
