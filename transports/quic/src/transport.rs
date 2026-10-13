@@ -84,7 +84,6 @@ pub struct GenTransport<P: Provider> {
     hole_punch_attempts: HashMap<SocketAddr, oneshot::Sender<Connecting>>,
 }
 
-#[expect(deprecated)]
 
 /// HOPR_INTERNAL_QUIC_RCVBUF=<bytes>: the UDP socket's receive buffer (SO_RCVBUF, bounded by net.core.rmem_max).
 /// A node fed by many peers at once overflows the kernel default of 208 KB in bursts (the exit lost 0.3 % of its
@@ -98,6 +97,7 @@ fn set_recv_buffer(socket: &socket2::Socket) {
     }
 }
 
+#[expect(deprecated)]
 impl<P: Provider> GenTransport<P> {
     /// Create a new [`GenTransport`] with the given [`Config`].
     pub fn new(config: Config) -> Self {
