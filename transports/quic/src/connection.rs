@@ -47,6 +47,20 @@ pub struct Connection {
     >,
     /// Future to wait for the connection to be closed.
     closing: Option<BoxFuture<'static, quinn::ConnectionError>>,
+    /// The periodic path-statistics log task (HOPR_INTERNAL_QUIC_STATS_SECS), aborted when this
+    /// connection is dropped: it holds a clone of the quinn connection, which would otherwise keep
+    /// the connection open for up to one period after libp2p let go of it.
+    #[cfg(feature = "tokio")]
+    stats_task: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for Connection {
+    fn drop(&mut self) {
+        #[cfg(feature = "tokio")]
+        if let Some(task) = self.stats_task.take() {
+            task.abort();
+        }
+    }
 }
 
 impl Connection {
@@ -58,13 +72,16 @@ impl Connection {
         // HOPR_INTERNAL_QUIC_STATS_SECS=n: log quinn's path statistics of every connection every n seconds
         // (target `hopr_quic_stats`): RTT, congestion window, packets lost and congestion events so far.
         #[cfg(feature = "tokio")]
+        let mut stats_task = None;
+        #[cfg(feature = "tokio")]
         if let Some(secs) = std::env::var("HOPR_INTERNAL_QUIC_STATS_SECS")
             .ok()
             .and_then(|v| v.trim().parse::<u64>().ok())
             .filter(|s| *s > 0)
         {
             let c = connection.clone();
-            tokio::spawn(async move {
+            // Only from inside a tokio runtime; a connection built elsewhere simply logs nothing.
+            stats_task = tokio::runtime::Handle::try_current().ok().map(|rt| rt.spawn(async move {
                 let started = std::time::Instant::now();
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
@@ -100,10 +117,12 @@ impl Connection {
                         "quic path stats"
                     );
                 }
-            });
+            }));
         }
         Self {
             connection,
+            #[cfg(feature = "tokio")]
+            stats_task,
             incoming: None,
             outgoing: None,
             closing: None,
